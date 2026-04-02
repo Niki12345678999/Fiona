@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: finova-backend
+    plan: starter
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: PORT
+        value: 8787
+      - key: HOST
+        value: 0.0.0.0
+      - key: AI_PROVIDER
+        value: openai
+      - key: AI_MODEL
+        value: gpt-4o
+      - key: ACCESS_CODE
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: SESSION_TTL_MS
+        value: "604800000"
