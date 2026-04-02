@@ -1,0 +1,17 @@
+# macOS
+.DS_Store
+
+# Local tool/runtime folders
+.local-node/
+.node-runtime/
+.tools/
+
+# Common Node artifacts
+node_modules/
+build/
+dist/
+
+# Env
+.env
+.env.local
+.env.production
