@@ -968,13 +968,15 @@ function useAuth() {
 }
 
 function resolveDefaultBackendUrl() {
-  const envBackend = String(import.meta.env.VITE_API_URL || '').trim().replace(/\/$/, '');
-  return envBackend;
+  const viteBackend = String(import.meta?.env?.VITE_API_URL || '').trim().replace(/\/$/, '');
+  const craBackend = String(process.env.REACT_APP_BACKEND_URL || '').trim().replace(/\/$/, '');
+  return viteBackend || craBackend;
 }
 
 function resolveDefaultAccessCode() {
-  const envCode = String(import.meta.env.VITE_ACCESS_CODE || '').trim();
-  return envCode;
+  const viteCode = String(import.meta?.env?.VITE_ACCESS_CODE || '').trim();
+  const craCode = String(process.env.REACT_APP_ACCESS_CODE || '').trim();
+  return viteCode || craCode;
 }
 
 const DEFAULT_BACKEND_URL = resolveDefaultBackendUrl();
@@ -1069,7 +1071,7 @@ function AuthProvider({ children }) {
 
   const register = async (email, password, name) => {
     if (!isAuthEnvConfigured()) {
-      return { error: 'Backend-Konfiguration fehlt. Setze VITE_API_URL und VITE_ACCESS_CODE.' };
+      return { error: 'Backend-Konfiguration fehlt. Setze VITE_API_URL/VITE_ACCESS_CODE oder REACT_APP_BACKEND_URL/REACT_APP_ACCESS_CODE.' };
     }
     const headers = buildAuthHeaders({ includeContentType: true });
     const payload = JSON.stringify({ email, password, name });
@@ -1100,7 +1102,7 @@ function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     if (!isAuthEnvConfigured()) {
-      return { error: 'Backend-Konfiguration fehlt. Setze VITE_API_URL und VITE_ACCESS_CODE.' };
+      return { error: 'Backend-Konfiguration fehlt. Setze VITE_API_URL/VITE_ACCESS_CODE oder REACT_APP_BACKEND_URL/REACT_APP_ACCESS_CODE.' };
     }
     const headers = buildAuthHeaders({ includeContentType: true });
     const payload = JSON.stringify({ email, password });
