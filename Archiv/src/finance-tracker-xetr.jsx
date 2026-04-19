@@ -968,60 +968,23 @@ function useAuth() {
 }
 
 function resolveDefaultBackendUrl() {
-  const envBackend = String(process.env.REACT_APP_BACKEND_URL || '').trim().replace(/\/$/, '');
-  if (envBackend) return envBackend;
-
-  try {
-    const protocol = String(window?.location?.protocol || 'http:');
-    const host = String(window?.location?.hostname || '').trim();
-    if (host && host !== 'localhost' && host !== '127.0.0.1' && host !== '::1') {
-      return `${protocol}//${host}:8787`;
-    }
-  } catch (_) {}
-
-  return 'http://localhost:8787';
+  const envBackend = String(import.meta.env.VITE_API_URL || '').trim().replace(/\/$/, '');
+  return envBackend;
 }
 
 function resolveDefaultAccessCode() {
-  const envCode = String(process.env.REACT_APP_ACCESS_CODE || '').trim();
-  return envCode || 'dev123';
+  const envCode = String(import.meta.env.VITE_ACCESS_CODE || '').trim();
+  return envCode;
 }
 
-const ENV_BACKEND_URL = String(process.env.REACT_APP_BACKEND_URL || '').trim().replace(/\/$/, '');
-const ENV_ACCESS_CODE = String(process.env.REACT_APP_ACCESS_CODE || '').trim();
 const DEFAULT_BACKEND_URL = resolveDefaultBackendUrl();
 const DEFAULT_ACCESS_CODE = resolveDefaultAccessCode();
 
 function getAuthRuntimeConfig() {
-  const fallback = {
+  return {
     backendUrl: DEFAULT_BACKEND_URL,
     accessCode: DEFAULT_ACCESS_CODE,
   };
-
-  try {
-    const raw = localStorage.getItem('ft-settings');
-    if (!raw) return fallback;
-
-    const parsed = JSON.parse(raw);
-    const hasFixedBackend = Boolean(ENV_BACKEND_URL);
-    const hasFixedAccessCode = Boolean(ENV_ACCESS_CODE);
-
-    let backendUrl = hasFixedBackend
-      ? ENV_BACKEND_URL
-      : String(parsed?.backendUrl || fallback.backendUrl).trim().replace(/\/$/, '') || fallback.backendUrl;
-    const isLocalOnly = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i.test(backendUrl);
-    const hasLanDefault = !/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i.test(DEFAULT_BACKEND_URL);
-    if (isLocalOnly && hasLanDefault) {
-      backendUrl = DEFAULT_BACKEND_URL;
-    }
-    const accessCode = hasFixedAccessCode
-      ? ENV_ACCESS_CODE
-      : String(parsed?.accessCode || fallback.accessCode).trim() || fallback.accessCode;
-
-    return { backendUrl, accessCode };
-  } catch {
-    return fallback;
-  }
 }
 
 function getAuthBackendCandidates() {
@@ -1029,22 +992,12 @@ function getAuthBackendCandidates() {
   const urls = [
     String(backendUrl || '').trim().replace(/\/$/, ''),
     String(DEFAULT_BACKEND_URL || '').trim().replace(/\/$/, ''),
-    'http://127.0.0.1:8787',
-    'http://localhost:8787',
   ].filter(Boolean);
   return Array.from(new Set(urls));
 }
 
 function persistAuthBackendUrl(backendUrl) {
-  if (ENV_BACKEND_URL) return;
-  try {
-    const raw = localStorage.getItem('ft-settings');
-    const parsed = raw ? JSON.parse(raw) : {};
-    localStorage.setItem('ft-settings', JSON.stringify({
-      ...parsed,
-      backendUrl,
-    }));
-  } catch (_) {}
+  void backendUrl;
 }
 
 function isNetworkError(err) {
@@ -1061,6 +1014,11 @@ function buildAuthHeaders({ token, includeContentType = false } = {}) {
   if (token) headers['x-session-token'] = token;
 
   return headers;
+}
+
+function isAuthEnvConfigured() {
+  const { backendUrl, accessCode } = getAuthRuntimeConfig();
+  return Boolean(String(backendUrl || '').trim()) && Boolean(String(accessCode || '').trim());
 }
 
 function AuthProvider({ children }) {
@@ -1110,6 +1068,9 @@ function AuthProvider({ children }) {
   }, [token]);
 
   const register = async (email, password, name) => {
+    if (!isAuthEnvConfigured()) {
+      return { error: 'Backend-Konfiguration fehlt. Setze VITE_API_URL und VITE_ACCESS_CODE.' };
+    }
     const headers = buildAuthHeaders({ includeContentType: true });
     const payload = JSON.stringify({ email, password, name });
     const candidates = getAuthBackendCandidates();
@@ -1138,6 +1099,9 @@ function AuthProvider({ children }) {
   };
 
   const login = async (email, password) => {
+    if (!isAuthEnvConfigured()) {
+      return { error: 'Backend-Konfiguration fehlt. Setze VITE_API_URL und VITE_ACCESS_CODE.' };
+    }
     const headers = buildAuthHeaders({ includeContentType: true });
     const payload = JSON.stringify({ email, password });
     const candidates = getAuthBackendCandidates();
@@ -1282,6 +1246,32 @@ function LoginPage() {
     }
   };
 
+  const labelStyle = {
+    display: 'block',
+    fontSize: '12px',
+    fontWeight: '600',
+    color: '#9ca3af',
+    marginBottom: '8px',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px'
+  };
+
+  const inputBaseStyle = {
+    width: '100%',
+    minHeight: '48px',
+    padding: '12px 16px',
+    border: '1px solid #2a2a2a',
+    borderRadius: '10px',
+    fontSize: '16px',
+    color: '#f3f4f6',
+    background: '#0f0f0f',
+    transition: 'all 0.2s ease',
+    boxSizing: 'border-box',
+    outline: 'none',
+    fontFamily: 'inherit',
+    maxWidth: '100%'
+  };
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -1289,45 +1279,50 @@ function LoginPage() {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '20px',
+      width: '100%',
+      maxWidth: '100%',
+      overflowX: 'hidden',
+      padding: 'clamp(12px, 4vw, 24px)',
+      boxSizing: 'border-box',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif',
     }}>
       <div style={{
-        width: '100%',
-        maxWidth: '420px',
+        width: 'min(100%, 420px)',
         background: '#111111',
         border: '1px solid #222',
-        borderRadius: '20px',
+        borderRadius: 'clamp(14px, 4vw, 20px)',
         boxShadow: '0 20px 60px rgba(0, 0, 0, 0.45)',
-        padding: '48px 40px',
+        padding: 'clamp(20px, 6vw, 40px)',
+        boxSizing: 'border-box',
+        overflowX: 'hidden',
         animation: 'slideUp 0.4s ease-out'
       }}>
         {/* Header */}
         <div style={{
           textAlign: 'center',
-          marginBottom: '36px'
+          marginBottom: 'clamp(20px, 6vw, 36px)'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '-18px' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px' }}>
             <img
               src="/login-logo-current.png"
               alt="Logo"
-              style={{ height: 250, width: 'auto', objectFit: 'contain', transform: 'translateY(18px)' }}
+              style={{ width: 'min(72vw, 260px)', maxWidth: '100%', height: 'auto', objectFit: 'contain' }}
             />
           </div>
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '4px' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '10px' }}>
             <img
               src="/wordmark-current.png"
               alt="Schriftzug"
-              style={{ height: 105, width: 'auto', objectFit: 'contain' }}
+              style={{ width: 'min(64vw, 220px)', maxWidth: '100%', height: 'auto', objectFit: 'contain' }}
             />
           </div>
           <p style={{
-            fontSize: '15px',
+            fontSize: 'clamp(14px, 3.6vw, 15px)',
             margin: '0',
             fontWeight: '700',
             lineHeight: 1.35,
             letterSpacing: '0.2px',
-            maxWidth: 300,
+            maxWidth: '100%',
             marginInline: 'auto',
             background: 'linear-gradient(90deg, #dbeafe 0%, #93c5fd 35%, #67e8f9 70%, #86efac 100%)',
             WebkitBackgroundClip: 'text',
@@ -1369,15 +1364,7 @@ function LoginPage() {
           {/* Name Input (Register Only) */}
           {isRegister && (
             <div>
-              <label style={{
-                display: 'block',
-                fontSize: '13px',
-                fontWeight: '600',
-                color: '#9ca3af',
-                marginBottom: '8px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px'
-              }}>
+              <label style={labelStyle}>
                 Name
               </label>
               <input
@@ -1385,19 +1372,7 @@ function LoginPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Max Mustermann"
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  border: '1px solid #2a2a2a',
-                  borderRadius: '10px',
-                  fontSize: '14px',
-                  color: '#f3f4f6',
-                  background: '#0f0f0f',
-                  transition: 'all 0.2s ease',
-                  boxSizing: 'border-box',
-                  outline: 'none',
-                  fontFamily: 'inherit'
-                }}
+                style={inputBaseStyle}
                 onFocus={(e) => {
                   e.target.style.borderColor = '#3b82f6';
                   e.target.style.background = '#111827';
@@ -1414,15 +1389,7 @@ function LoginPage() {
 
           {/* Email Input */}
           <div>
-            <label style={{
-              display: 'block',
-              fontSize: '13px',
-              fontWeight: '600',
-              color: '#9ca3af',
-              marginBottom: '8px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px'
-            }}>
+            <label style={labelStyle}>
               E-Mail
             </label>
             <input
@@ -1430,19 +1397,7 @@ function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="deine@email.de"
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                border: '1px solid #2a2a2a',
-                borderRadius: '10px',
-                fontSize: '14px',
-                color: '#f3f4f6',
-                background: '#0f0f0f',
-                transition: 'all 0.2s ease',
-                boxSizing: 'border-box',
-                outline: 'none',
-                fontFamily: 'inherit',
-              }}
+              style={inputBaseStyle}
               onFocus={(e) => {
                 e.target.style.borderColor = '#3b82f6';
                 e.target.style.background = '#111827';
@@ -1458,15 +1413,7 @@ function LoginPage() {
 
           {/* Password Input */}
           <div>
-            <label style={{
-              display: 'block',
-              fontSize: '13px',
-              fontWeight: '600',
-              color: '#9ca3af',
-              marginBottom: '8px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px'
-            }}>
+            <label style={labelStyle}>
               Passwort
             </label>
             <div style={{
@@ -1479,19 +1426,7 @@ function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  border: '1px solid #2a2a2a',
-                  borderRadius: '10px',
-                  fontSize: '14px',
-                  color: '#f3f4f6',
-                  background: '#0f0f0f',
-                  transition: 'all 0.2s ease',
-                  boxSizing: 'border-box',
-                  outline: 'none',
-                  fontFamily: 'inherit',
-                }}
+                style={inputBaseStyle}
                 onFocus={(e) => {
                   e.target.style.borderColor = '#3b82f6';
                   e.target.style.background = '#111827';
@@ -1597,6 +1532,10 @@ function LoginPage() {
       </div>
 
       <style>{`
+        *, *::before, *::after {
+          box-sizing: border-box;
+        }
+
         @keyframes slideUp {
           from {
             opacity: 0;

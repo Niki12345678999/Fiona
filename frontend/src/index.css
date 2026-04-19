@@ -1,5 +1,7 @@
 html, body, #root {
   height: 100%;
+  width: 100%;
+  max-width: 100%;
 }
 
 body {
@@ -7,4 +9,9 @@ body {
   background: #0b0f14;
   color: #e5e7eb;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  overflow-x: hidden;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
 }

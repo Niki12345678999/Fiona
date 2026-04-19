@@ -7,7 +7,9 @@ Dieses Setup macht die App weltweit erreichbar (nicht nur im WLAN).
 - Frontend: Vercel (React Build aus `Archiv`)
 - Backend: Render Web Service (Node.js aus `Archiv/backend`)
 
-## Vor dem Deploy
+## Vor dem Deploygit branch -M main
+git remote add origin DEIN-GITHUB-LINK
+git push -u origin main
 
 1. Code nach GitHub pushen.
 2. Sicherstellen, dass Build lokal funktioniert:
@@ -35,8 +37,8 @@ Dieses Setup macht die App weltweit erreichbar (nicht nur im WLAN).
    - Build Command: `npm run build`
    - Output Directory: `build`
 5. Environment Variables setzen:
-   - `REACT_APP_BACKEND_URL=https://dein-backend.onrender.com`
-   - `REACT_APP_ACCESS_CODE=<genau derselbe Wert wie ACCESS_CODE auf Render>`
+   - `VITE_API_URL=https://dein-backend.onrender.com`
+   - `VITE_ACCESS_CODE=<genau derselbe Wert wie ACCESS_CODE auf Render>`
 6. Deploy starten.
 
 Hinweis: `vercel.json` ist bereits fuer SPA-Routing vorbereitet.

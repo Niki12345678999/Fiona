@@ -36,8 +36,8 @@ Kurzfassung:
 2. Backend Secrets auf Render setzen (`ACCESS_CODE`, `OPENAI_API_KEY`, `CORS_ORIGINS`)
 3. Frontend auf Vercel deployen (`vercel.json` ist vorbereitet)
 4. Frontend Env-Variablen auf Vercel setzen:
-	- `REACT_APP_BACKEND_URL=https://dein-backend.onrender.com`
-	- `REACT_APP_ACCESS_CODE=<dein ACCESS_CODE>`
+	- `VITE_API_URL=https://dein-backend.onrender.com`
+	- `VITE_ACCESS_CODE=<dein ACCESS_CODE>`
 
 ## Wichtige Env-Dateien
 
