@@ -25,6 +25,7 @@ const EODHD_API_TOKEN = process.env.EODHD_API_TOKEN || 'demo';
 const ALPHAVANTAGE_API_KEY = process.env.ALPHAVANTAGE_API_KEY || '';
 const SESSION_TTL_MS = Number(process.env.SESSION_TTL_MS || 1000 * 60 * 60 * 24 * 7); // 7 days
 const CORS_ORIGINS = String(process.env.CORS_ORIGINS || '').trim();
+const ALLOWED_ORIGINS = CORS_ORIGINS.split(',').map((x) => x.trim()).filter(Boolean);
 let sessions = loadSessions();
 const fundamentalsCache = new Map();
 
@@ -136,16 +137,25 @@ function logSecurityEvent(event, req, details = {}) {
 // MIDDLEWARE
 // ═══════════════════════════════════════════════════════════════════
 
-const corsMiddleware = CORS_ORIGINS
-  ? cors({
-      origin: (origin, callback) => {
-        if (!origin) return callback(null, true);
-        const allowed = CORS_ORIGINS.split(',').map((x) => x.trim()).filter(Boolean);
-        if (allowed.includes(origin)) return callback(null, true);
-        return callback(new Error('Not allowed by CORS'));
-      },
-    })
-  : cors();
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+  if (!ALLOWED_ORIGINS.length) return true;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+
+  try {
+    const hostname = new URL(origin).hostname;
+    if (hostname.endsWith('.vercel.app')) return true;
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') return true;
+  } catch {
+    return false;
+  }
+
+  return false;
+}
+
+const corsMiddleware = cors({
+  origin: (origin, callback) => callback(null, isAllowedOrigin(origin)),
+});
 
 app.use(corsMiddleware);
 app.use(express.json());
@@ -200,18 +210,50 @@ app.use((req, res, next) => {
 // ═══════════════════════════════════════════════════════════════════
 
 let aiClient;
+let aiClientProvider;
+let aiClientInitError = null;
 
-if (AI_PROVIDER === 'anthropic') {
-  // For Anthropic Claude
-  const Anthropic = (await import('@anthropic-ai/sdk')).default;
-  aiClient = new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY,
-  });
-} else {
-  // Default to OpenAI
-  aiClient = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-  });
+async function getAiClient() {
+  if (aiClient && aiClientProvider === AI_PROVIDER) return aiClient;
+  if (aiClientInitError && aiClientProvider === AI_PROVIDER) {
+    throw new Error(aiClientInitError);
+  }
+
+  try {
+    if (AI_PROVIDER === 'anthropic') {
+      if (!process.env.ANTHROPIC_API_KEY) {
+        throw new Error('ANTHROPIC_API_KEY fehlt');
+      }
+
+      let Anthropic;
+      try {
+        Anthropic = (await import('@anthropic-ai/sdk')).default;
+      } catch {
+        throw new Error('Paket @anthropic-ai/sdk fehlt');
+      }
+
+      aiClient = new Anthropic({
+        apiKey: process.env.ANTHROPIC_API_KEY,
+      });
+    } else {
+      if (!process.env.OPENAI_API_KEY) {
+        throw new Error('OPENAI_API_KEY fehlt');
+      }
+
+      aiClient = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY,
+      });
+    }
+
+    aiClientProvider = AI_PROVIDER;
+    aiClientInitError = null;
+    return aiClient;
+  } catch (error) {
+    aiClient = null;
+    aiClientProvider = AI_PROVIDER;
+    aiClientInitError = String(error?.message || error || 'AI client initialization failed');
+    throw error;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -454,7 +496,10 @@ Use neutral, descriptive language (no investment advice). Return ONLY valid JSON
 // ═══════════════════════════════════════════════════════════════════
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', ai: AI_PROVIDER, model: AI_MODEL });
+  const aiReady = AI_PROVIDER === 'anthropic'
+    ? Boolean(process.env.ANTHROPIC_API_KEY)
+    : Boolean(process.env.OPENAI_API_KEY);
+  res.json({ status: 'ok', ai: AI_PROVIDER, model: AI_MODEL, aiReady });
 });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1053,6 +1098,15 @@ app.post('/api/fundamentals', async (req, res) => {
 
 app.post('/api/analyze', async (req, res) => {
   try {
+    let client;
+    try {
+      client = await getAiClient();
+    } catch (configError) {
+      return res.status(503).json({
+        error: `AI-Konfiguration fehlt oder ungültig: ${String(configError?.message || configError)}`,
+      });
+    }
+
     const { query, module, portfolio = [] } = req.body;
 
     if (!query || !module) {
@@ -1074,7 +1128,7 @@ app.post('/api/analyze', async (req, res) => {
 
     if (AI_PROVIDER === 'anthropic') {
       // Anthropic Claude
-      const response = await aiClient.messages.create({
+      const response = await client.messages.create({
         model: process.env.ANTHROPIC_MODEL || 'claude-3-opus-20250219',
         max_tokens: 2000,
         messages: [
@@ -1088,7 +1142,7 @@ app.post('/api/analyze', async (req, res) => {
       analysis = response.content[0]?.text || '';
     } else {
       // OpenAI
-      const response = await aiClient.chat.completions.create({
+      const response = await client.chat.completions.create({
         model: AI_MODEL,
         temperature: 0.7,
         max_tokens: 2000,
@@ -1148,10 +1202,18 @@ app.post('/api/analyze', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════
 
 app.listen(PORT, HOST, () => {
+  const aiReady = AI_PROVIDER === 'anthropic'
+    ? Boolean(process.env.ANTHROPIC_API_KEY)
+    : Boolean(process.env.OPENAI_API_KEY);
+
   console.log(`\n🚀 Finance Tracker Backend running on http://localhost:${PORT}`);
   console.log(`🌐 Also reachable on http://127.0.0.1:${PORT}`);
   console.log(`📊 AI Provider: ${AI_PROVIDER}`);
   console.log(`🤖 AI Model: ${AI_MODEL}`);
+  console.log(`🔐 AI Key configured: ${aiReady ? 'yes' : 'no'}`);
+  if (!aiReady) {
+    console.warn('⚠️  AI key fehlt: /api/analyze liefert 503 bis OPENAI_API_KEY bzw. ANTHROPIC_API_KEY gesetzt ist.');
+  }
   console.log(`\n✅ POST http://localhost:${PORT}/api/analyze`);
   console.log(`   Headers: { "x-access-code": "${ACCESS_CODE}" }\n`);
 });
